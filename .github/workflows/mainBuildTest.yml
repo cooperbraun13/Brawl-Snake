@@ -1,0 +1,154 @@
+#
+# GitHub.com configuration for their actions system
+#
+# This provides Continuous Integration services.
+#  That means with each commit and push it runs tests.
+#  The goal is to continually run tests on changes to detect errors.
+#
+#  @author Aaron S. Crandall <crandall@gonzaga.edu>
+#  @copyright 2021
+#
+
+name: Final Project CI Pipeline
+
+# Controls when the action will run.
+# This will run on pushing to any branch, creating any pull request
+#  or if you run it manually via the web interface (workflow_dispatch)
+on: [push, pull_request, workflow_dispatch]
+
+# For non-pre built yahtzee containers, this needs to be done first.
+#  run: |
+#    apt update
+#    apt install -y make
+#    make setup-dependencies
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+
+  # ****** BUILD ***************************************************************
+  # This workflow contains jobs to build this project
+  build:
+    name: "Build Main Project Game Source"
+    runs-on: [self-hosted, linux, CPSC224]
+    container: 
+      image: maven:3.9.9-eclipse-temurin-11
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install make
+        run: |
+          apt update
+          apt install -y make
+      - name: Build the software
+        run: make build
+      - name: Save JAR file
+        uses: actions/upload-artifact@v4
+        with:
+          name: Main Game jar File
+          path: target/*.jar
+
+
+  # ***** TEST **************************************************************
+  # Use JUnit5 to run the unit testing for the project
+  unit-test:
+    name: "Test Farkle"
+    needs: build
+    runs-on: [self-hosted, linux, CPSC224]
+    container: 
+      image: maven:3.9.9-eclipse-temurin-11
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install make
+        run: |
+          apt update
+          apt install -y make
+      - name: Test the software
+        run: make test
+
+
+  # ***** LINT **************************************************************
+  # Use Google's linter - stage doesn't stall pipelines if it fails
+  lint:
+    name: "Lint Farkle"
+    needs: build
+    runs-on: [self-hosted, linux, CPSC224]
+    container: 
+      image: maven:3.9.9-eclipse-temurin-11
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          apt update
+          apt install -y make
+      - name: Lint the software
+        run: make lint
+
+
+  # ***** Spellcheck **************************************************************
+  # Uses the codespell tool to check the comments for spelling errors
+  spellcheck:
+    name: "Spellcheck Farkle"
+    needs: build
+    runs-on: [self-hosted, linux, CPSC224]
+    container: 
+      image: maven:3.9.9-eclipse-temurin-11
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install make
+        run: |
+          apt update
+          apt install -y make codespell
+      - name: Spellcheck the software
+        run: make spellcheck
+
+
+  # ***** Javadoc **************************************************************
+  # Javadoc generates documentation from the java source code
+  # Information comes from the code and from the comments in the code
+  javadoc:
+    name: "Javadoc Generator"
+    needs: [build]
+    runs-on: [self-hosted, linux, CPSC224]
+    container: 
+      image: maven:3.9.9-eclipse-temurin-11
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install make
+        run: |
+          apt update
+          apt install -y make
+      - name: Generate javadoc
+        run: make javadoc
+      - name: Archive Documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: Javadoc documentation
+          path: target/reports/apidocs/
+
+  # ***** Code Coverage **************************************************************
+  # Uses the JaCoCo tool to watch the output of JUnit so it can find tested lines of code
+  # Output is in html, csv, and xml files
+  code-coverage:
+    name: "Code Coverage Generator"
+    needs: [unit-test]
+    runs-on: [self-hosted, linux, CPSC224]
+    container: 
+      image: maven:3.9.9-eclipse-temurin-11
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install make
+        run: |
+          apt update
+          apt install -y make
+      - name: Generate Code Coverage with JaCoCo
+        run: make coverage
+      - name: Archive Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Code Coverage Report
+          path: target/site/jacoco/
